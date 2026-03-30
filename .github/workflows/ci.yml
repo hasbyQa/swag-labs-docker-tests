@@ -15,57 +15,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Build the Docker image
       - name: Build Docker image
         run: docker build -t swag-labs-tests .
 
-      # Run tests and copy the surefire reports out of the container
-      # We use a named container so we can copy from it after it exits
+      # continue-on-error keeps the pipeline GREEN even when tests fail
+      # Test failures are a normal result — not a pipeline error
       - name: Run tests in container
+        continue-on-error: true
         run: |
           docker run --name test-run swag-labs-tests || true
           docker cp test-run:/app/target/surefire-reports ./surefire-reports || true
           docker rm test-run
 
-      # Parse the surefire XML reports to get test counts for notifications
-      - name: Parse test results
-        if: always()
-        id: results
-        run: |
-          TOTAL=0; PASSED=0; FAILED=0; ERRORS=0; SKIPPED=0
-          FAILED_TESTS=""
-
-          for f in surefire-reports/TEST-*.xml; do
-            [ -f "$f" ] || continue
-            t=$(grep -oP 'tests="\K[0-9]+' "$f" | head -1); TOTAL=$((TOTAL + ${t:-0}))
-            fa=$(grep -oP 'failures="\K[0-9]+' "$f" | head -1); FAILED=$((FAILED + ${fa:-0}))
-            e=$(grep -oP 'errors="\K[0-9]+' "$f" | head -1); ERRORS=$((ERRORS + ${e:-0}))
-            s=$(grep -oP 'skipped="\K[0-9]+' "$f" | head -1); SKIPPED=$((SKIPPED + ${s:-0}))
-
-            # Collect names of failed/errored tests
-            while IFS= read -r line; do
-              FAILED_TESTS="${FAILED_TESTS}• ${line}\n"
-            done < <(grep -oP '(?<=classname=")[^"]+\.[^"]+(?=")' "$f" | sort -u || true)
-          done
-
-          PASSED=$((TOTAL - FAILED - ERRORS - SKIPPED))
-          [ $((FAILED + ERRORS)) -eq 0 ] && STATUS="PASSED ✅" || STATUS="FAILED ❌"
-          [ $((FAILED + ERRORS)) -eq 0 ] && COLOR="good" || COLOR="danger"
-          [ -z "$FAILED_TESTS" ] && FAILED_TESTS="• All tests passed!"
-
-          echo "total=$TOTAL"       >> $GITHUB_OUTPUT
-          echo "passed=$PASSED"     >> $GITHUB_OUTPUT
-          echo "failed=$FAILED"     >> $GITHUB_OUTPUT
-          echo "errors=$ERRORS"     >> $GITHUB_OUTPUT
-          echo "skipped=$SKIPPED"   >> $GITHUB_OUTPUT
-          echo "status=$STATUS"     >> $GITHUB_OUTPUT
-          echo "color=$COLOR"       >> $GITHUB_OUTPUT
-          # Multiline output needs special handling
-          echo "failed_tests<<EOF"  >> $GITHUB_OUTPUT
-          printf "%b" "$FAILED_TESTS" >> $GITHUB_OUTPUT
-          echo "EOF"                >> $GITHUB_OUTPUT
-
-      # Upload test reports as a downloadable artifact in the GitHub Actions UI
       - name: Upload surefire reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -74,12 +35,65 @@ jobs:
           path: surefire-reports/
           if-no-files-found: ignore
 
-      # Send a structured Slack notification
+      # Parse XML reports into individual env vars — no multiline strings
+      # Multiline strings break Slack JSON, so we keep everything on one line
+      - name: Parse test results
+        if: always()
+        id: results
+        run: |
+          TOTAL=0; PASSED=0; FAILED=0; ERRORS=0; SKIPPED=0
+          FAILED_LIST=""
+
+          for f in surefire-reports/TEST-*.xml; do
+            [ -f "$f" ] || continue
+            t=$(grep -oP 'tests="\K[0-9]+' "$f" | head -1)
+            fa=$(grep -oP 'failures="\K[0-9]+' "$f" | head -1)
+            e=$(grep -oP 'errors="\K[0-9]+' "$f" | head -1)
+            s=$(grep -oP 'skipped="\K[0-9]+' "$f" | head -1)
+            TOTAL=$((TOTAL + ${t:-0}))
+            FAILED=$((FAILED + ${fa:-0}))
+            ERRORS=$((ERRORS + ${e:-0}))
+            SKIPPED=$((SKIPPED + ${s:-0}))
+
+            # Collect failed test method names — one per line, stripped to short name
+            while IFS= read -r name; do
+              short=$(echo "$name" | sed 's/.*\.//')
+              FAILED_LIST="${FAILED_LIST}${short}, "
+            done < <(grep -oP 'testcase[^>]+name="\K[^"]+(?="[^>]+classname)' "$f" 2>/dev/null || true)
+          done
+
+          PASSED=$((TOTAL - FAILED - ERRORS - SKIPPED))
+
+          if [ $((FAILED + ERRORS)) -eq 0 ]; then
+            STATUS="PASSED"
+            EMOJI="✅"
+            COLOR="good"
+            FAILED_LIST="All tests passed!"
+          else
+            STATUS="FAILED"
+            EMOJI="❌"
+            COLOR="danger"
+            # Remove trailing comma and space
+            FAILED_LIST="${FAILED_LIST%, }"
+            [ -z "$FAILED_LIST" ] && FAILED_LIST="See surefire reports for details"
+          fi
+
+          echo "total=$TOTAL"         >> $GITHUB_OUTPUT
+          echo "passed=$PASSED"       >> $GITHUB_OUTPUT
+          echo "failed=$FAILED"       >> $GITHUB_OUTPUT
+          echo "errors=$ERRORS"       >> $GITHUB_OUTPUT
+          echo "skipped=$SKIPPED"     >> $GITHUB_OUTPUT
+          echo "status=$STATUS"       >> $GITHUB_OUTPUT
+          echo "emoji=$EMOJI"         >> $GITHUB_OUTPUT
+          echo "color=$COLOR"         >> $GITHUB_OUTPUT
+          echo "failed_list=$FAILED_LIST" >> $GITHUB_OUTPUT
+
+      # Slack — uses simple flat JSON, no multiline values that could break parsing
       - name: Notify Slack
         if: always()
         uses: slackapi/slack-github-action@v1.26.0
         with:
-          payload: |
+          payload: >-
             {
               "attachments": [
                 {
@@ -89,7 +103,8 @@ jobs:
                       "type": "header",
                       "text": {
                         "type": "plain_text",
-                        "text": "${{ steps.results.outputs.status }} — Swag Labs Test Suite"
+                        "text": "${{ steps.results.outputs.emoji }} ${{ steps.results.outputs.status }} — Swag Labs Test Suite",
+                        "emoji": true
                       }
                     },
                     {
@@ -100,6 +115,9 @@ jobs:
                         { "type": "mrkdwn", "text": "*Triggered by:*\n${{ github.actor }}" },
                         { "type": "mrkdwn", "text": "*Commit:*\n${{ github.event.head_commit.message }}" }
                       ]
+                    },
+                    {
+                      "type": "divider"
                     },
                     {
                       "type": "section",
@@ -114,15 +132,19 @@ jobs:
                       "type": "section",
                       "text": {
                         "type": "mrkdwn",
-                        "text": "*🔥 Failed Test Details:*\n${{ steps.results.outputs.failed_tests }}"
+                        "text": "*🔥 Failed Test Details:*\n${{ steps.results.outputs.failed_list }}"
                       }
+                    },
+                    {
+                      "type": "divider"
                     },
                     {
                       "type": "actions",
                       "elements": [
                         {
                           "type": "button",
-                          "text": { "type": "plain_text", "text": "View Run Details" },
+                          "style": "primary",
+                          "text": { "type": "plain_text", "text": "View Run Details", "emoji": true },
                           "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
                         }
                       ]
@@ -135,7 +157,7 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
 
-      # Send a structured email notification via Gmail
+      # Email — uses HTML for a clean rendered layout like your screenshot
       - name: Notify Email
         if: always()
         uses: dawidd6/action-send-mail@v3
@@ -146,28 +168,79 @@ jobs:
           password: ${{ secrets.MAIL_PASSWORD }}
           to: ${{ secrets.MAIL_RECIPIENT }}
           from: CI Test Bot <${{ secrets.MAIL_USERNAME }}>
-          subject: "${{ steps.results.outputs.status }} - ${{ github.repository }}"
-          convert_markdown: true
-          body: |
-            # ${{ steps.results.outputs.status }} — Swag Labs Test Suite
+          subject: "${{ steps.results.outputs.emoji }} ${{ steps.results.outputs.status }} - ${{ github.repository }}"
+          html_body: |
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;border:1px solid #ddd;border-radius:8px;overflow:hidden;">
 
-            | Field        | Value |
-            |-------------|-------|
-            | Repository  | ${{ github.repository }} |
-            | Branch      | ${{ github.ref_name }} |
-            | Commit      | ${{ github.event.head_commit.message }} |
-            | Triggered by | ${{ github.actor }} |
+              <!-- Header -->
+              <div style="background-color:${{ steps.results.outputs.color == 'good' && '#2eb67d' || '#e01e5a' }};padding:24px;text-align:center;">
+                <h1 style="color:white;margin:0;font-size:24px;">
+                  ${{ steps.results.outputs.emoji }} ${{ steps.results.outputs.status }}
+                </h1>
+                <p style="color:white;margin:8px 0 0;font-size:16px;">Swag Labs Test Suite</p>
+              </div>
 
-            ## Test Results
+              <!-- Run Info -->
+              <div style="padding:24px;background:#f9f9f9;">
+                <table style="width:100%;border-collapse:collapse;">
+                  <tr>
+                    <td style="padding:8px;font-weight:bold;color:#555;width:140px;">Repository</td>
+                    <td style="padding:8px;">${{ github.repository }}</td>
+                  </tr>
+                  <tr style="background:#fff;">
+                    <td style="padding:8px;font-weight:bold;color:#555;">Branch</td>
+                    <td style="padding:8px;">${{ github.ref_name }}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:8px;font-weight:bold;color:#555;">Commit</td>
+                    <td style="padding:8px;">${{ github.event.head_commit.message }}</td>
+                  </tr>
+                  <tr style="background:#fff;">
+                    <td style="padding:8px;font-weight:bold;color:#555;">Triggered by</td>
+                    <td style="padding:8px;">${{ github.actor }}</td>
+                  </tr>
+                </table>
+              </div>
 
-            | Total | Passed | Failed | Errors | Skipped |
-            |-------|--------|--------|--------|---------|
-            | ${{ steps.results.outputs.total }} | ${{ steps.results.outputs.passed }} | ${{ steps.results.outputs.failed }} | ${{ steps.results.outputs.errors }} | ${{ steps.results.outputs.skipped }} |
+              <!-- Test Results -->
+              <div style="padding:24px;">
+                <h2 style="margin:0 0 16px;font-size:18px;">Test Results</h2>
+                <table style="width:100%;border-collapse:collapse;text-align:center;">
+                  <thead>
+                    <tr style="background:#f0f0f0;">
+                      <th style="padding:10px;border:1px solid #ddd;">Total</th>
+                      <th style="padding:10px;border:1px solid #ddd;color:#2eb67d;">Passed</th>
+                      <th style="padding:10px;border:1px solid #ddd;color:#e01e5a;">Failed</th>
+                      <th style="padding:10px;border:1px solid #ddd;color:#e8a838;">Errors</th>
+                      <th style="padding:10px;border:1px solid #ddd;color:#888;">Skipped</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td style="padding:10px;border:1px solid #ddd;font-weight:bold;">${{ steps.results.outputs.total }}</td>
+                      <td style="padding:10px;border:1px solid #ddd;color:#2eb67d;font-weight:bold;">${{ steps.results.outputs.passed }}</td>
+                      <td style="padding:10px;border:1px solid #ddd;color:#e01e5a;font-weight:bold;">${{ steps.results.outputs.failed }}</td>
+                      <td style="padding:10px;border:1px solid #ddd;color:#e8a838;font-weight:bold;">${{ steps.results.outputs.errors }}</td>
+                      <td style="padding:10px;border:1px solid #ddd;color:#888;font-weight:bold;">${{ steps.results.outputs.skipped }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
 
-            ## 🔥 Failed Test Details
-            ${{ steps.results.outputs.failed_tests }}
+              <!-- Failed Tests -->
+              <div style="padding:0 24px 24px;">
+                <h2 style="margin:0 0 12px;font-size:18px;">🔥 Failed Test Details</h2>
+                <div style="background:#fff5f5;border-left:4px solid #e01e5a;padding:12px 16px;border-radius:4px;font-size:14px;">
+                  ${{ steps.results.outputs.failed_list }}
+                </div>
+              </div>
 
-            ## 📎 Test Reports
-            Download the full surefire report artifact from the link below.
+              <!-- Footer button -->
+              <div style="padding:16px 24px 24px;text-align:center;">
+                <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                   style="background:#0366d6;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:14px;">
+                  View Full Run &amp; Download Artifacts
+                </a>
+              </div>
 
-            [View Full Run & Download Artifacts](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            </div>
