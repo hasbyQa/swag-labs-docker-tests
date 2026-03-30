@@ -3,26 +3,24 @@ package com.swaglabs.pages;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
 
-/**
- * Covers the full 3-step checkout flow:
- *   Step 1 → Fill personal info (/checkout-step-one.html)
- *   Step 2 → Order overview    (/checkout-step-two.html)
- *   Complete → Confirmation     (/checkout-complete.html)
- */
+// Covers all 3 checkout steps:
+//   Step 1 - fill info  (/checkout-step-one.html)
+//   Step 2 - overview   (/checkout-step-two.html)
+//   Done   - confirmed  (/checkout-complete.html)
 public class CheckoutPage extends BasePage {
 
-    // Step 1 locators
+    // Confirmed from live DOM inspection — this site uses camelCase data-test values
     private static final By FIRST_NAME_INPUT = By.cssSelector("[data-test='firstName']");
     private static final By LAST_NAME_INPUT  = By.cssSelector("[data-test='lastName']");
     private static final By POSTAL_CODE      = By.cssSelector("[data-test='postalCode']");
     private static final By CONTINUE_BUTTON  = By.cssSelector("[data-test='continue']");
     private static final By ERROR_MESSAGE    = By.cssSelector("[data-test='error']");
 
-    // Step 2 locators
-    private static final By FINISH_BUTTON    = By.cssSelector("[data-test='finish']");
-    private static final By ITEM_TOTAL       = By.cssSelector("[data-test='subtotal-label']");
+    // Step 2 — only present on /checkout-step-two.html
+    private static final By FINISH_BUTTON = By.cssSelector("[data-test='finish']");
+    private static final By ITEM_TOTAL    = By.cssSelector("[data-test='subtotal-label']");
 
-    // Confirmation locators
+    // Confirmation — only present on /checkout-complete.html
     private static final By COMPLETE_HEADER  = By.cssSelector("[data-test='complete-header']");
     private static final By BACK_HOME_BUTTON = By.cssSelector("[data-test='back-to-products']");
 
@@ -30,24 +28,32 @@ public class CheckoutPage extends BasePage {
         super(driver);
     }
 
-    // Step 1
-
-    // Fills in the checkout info form and clicks Continue
+    // Form is already rendered when we arrive here (CartPage.proceedToCheckout guarantees it)
+    // After filling, waits for the Finish button to confirm step-two is loaded
     public CheckoutPage fillInfo(String firstName, String lastName, String postalCode) {
         type(FIRST_NAME_INPUT, firstName);
         type(LAST_NAME_INPUT, lastName);
         type(POSTAL_CODE, postalCode);
         click(CONTINUE_BUTTON);
+        waitForElementVisible(FINISH_BUTTON);
         return this;
     }
 
-    // Clicks Continue without filling any fields — triggers validation error
+    // Submits with nothing filled — stays on step 1 and shows a validation error
     public CheckoutPage submitEmptyForm() {
         click(CONTINUE_BUTTON);
+        waitForElementVisible(ERROR_MESSAGE);
         return this;
     }
 
-    // Returns the form validation error message
+    // Types only first name then submits — triggers "Last Name is required" error
+    public CheckoutPage fillFirstNameOnly(String firstName) {
+        type(FIRST_NAME_INPUT, firstName);
+        click(CONTINUE_BUTTON);
+        waitForElementVisible(ERROR_MESSAGE);
+        return this;
+    }
+
     public String getErrorMessage() {
         return getText(ERROR_MESSAGE);
     }
@@ -56,34 +62,29 @@ public class CheckoutPage extends BasePage {
         return isVisible(ERROR_MESSAGE);
     }
 
-    // Step 2
-
-    // Returns the item subtotal text (e.g., "Item total: $29.99")
+    // Returns the subtotal line e.g. "Item total: $29.99"
     public String getItemTotal() {
         return getText(ITEM_TOTAL);
     }
 
-    // Confirms the order — goes to the completion page
+    // Clicks Finish and waits for the confirmation header before returning
     public CheckoutPage finishOrder() {
         click(FINISH_BUTTON);
+        waitForElementVisible(COMPLETE_HEADER);
         return this;
     }
 
-    // Confirmation
-
-    // Returns "Thank you for your order!" confirmation text
     public String getConfirmationMessage() {
         return getText(COMPLETE_HEADER);
     }
 
-    // True if the order completion header is visible
     public boolean isOrderComplete() {
         return isVisible(COMPLETE_HEADER);
     }
 
-    // Goes back to the products page from confirmation screen
     public InventoryPage backToProducts() {
         click(BACK_HOME_BUTTON);
+        waitForUrlToContain("inventory");
         return new InventoryPage(driver);
     }
 }

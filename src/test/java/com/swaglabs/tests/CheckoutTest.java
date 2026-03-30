@@ -88,23 +88,30 @@ class CheckoutTest extends BaseTest {
     @Test
     @DisplayName("Empty checkout form shows validation error")
     void emptyCheckoutForm_shouldShowError() {
+        // Swag Labs validates First Name first — empty form triggers that error
         CheckoutPage checkoutPage = cartPage
                 .proceedToCheckout()
                 .submitEmptyForm();
 
         assertTrue(checkoutPage.isErrorDisplayed(),
                 "Submitting empty form should show an error");
+
+        assertTrue(checkoutPage.getErrorMessage().toLowerCase().contains("first name"),
+                "Error should mention 'First Name' is required");
     }
 
     @Test
-    @DisplayName("Missing postal code shows validation error")
-    void missingPostalCode_shouldShowError() {
-        CheckoutPage checkoutPage = cartPage.proceedToCheckout();
-
-        // Fill name but leave postal code empty
-        checkoutPage.fillInfo(TestConfig.FIRST_NAME, TestConfig.LAST_NAME, "");
+    @DisplayName("Missing last name shows validation error")
+    void missingLastName_shouldShowError() {
+        // Fill first name only — last name is the next required field
+        CheckoutPage checkoutPage = cartPage
+                .proceedToCheckout()
+                .fillFirstNameOnly(TestConfig.FIRST_NAME);
 
         assertTrue(checkoutPage.isErrorDisplayed(),
-                "Missing postal code should trigger a validation error");
+                "Missing last name should trigger a validation error");
+
+        assertTrue(checkoutPage.getErrorMessage().toLowerCase().contains("last name"),
+                "Error should mention 'Last Name' is required");
     }
 }

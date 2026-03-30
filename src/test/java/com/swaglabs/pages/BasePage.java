@@ -9,7 +9,7 @@ import org.openqa.selenium.support.ui.WebDriverWait;
 
 import java.time.Duration;
 
-// Base class for all page objects
+// Parent class for all page objects — wraps raw Selenium calls into clean reusable methods
 public abstract class BasePage {
 
     protected final WebDriver driver;
@@ -17,30 +17,27 @@ public abstract class BasePage {
 
     public BasePage(WebDriver driver) {
         this.driver = driver;
-        // One shared wait instance — timeout defined in TestConfig
         this.wait = new WebDriverWait(driver, Duration.ofSeconds(TestConfig.TIMEOUT_SECONDS));
     }
 
-    // Element interactions
-
-    // Waits for element to be visible, then clicks it
+    // Waits until the element can be clicked, then clicks it
     protected void click(By locator) {
         wait.until(ExpectedConditions.elementToBeClickable(locator)).click();
     }
 
-    // Waits for element, clears it, then types the given text
+    // Waits for the element, clears it, then types the text
     protected void type(By locator, String text) {
         WebElement el = wait.until(ExpectedConditions.visibilityOfElementLocated(locator));
         el.clear();
         el.sendKeys(text);
     }
 
-    // Returns trimmed visible text of an element
+    // Returns the visible text of an element, trimmed
     protected String getText(By locator) {
         return wait.until(ExpectedConditions.visibilityOfElementLocated(locator)).getText().trim();
     }
 
-    // Returns true if the element is present and visible on the page
+    // Returns true if the element is visible on the page, false otherwise
     protected boolean isVisible(By locator) {
         try {
             return wait.until(ExpectedConditions.visibilityOfElementLocated(locator)).isDisplayed();
@@ -49,7 +46,16 @@ public abstract class BasePage {
         }
     }
 
-    // Returns the current browser URL
+    // Blocks until the element is visible in the DOM — use as a page-load gate
+    protected void waitForElementVisible(By locator) {
+        wait.until(ExpectedConditions.visibilityOfElementLocated(locator));
+    }
+
+    // Blocks until the browser URL contains the given string — confirms navigation happened
+    protected void waitForUrlToContain(String fragment) {
+        wait.until(ExpectedConditions.urlContains(fragment));
+    }
+
     protected String getCurrentUrl() {
         return driver.getCurrentUrl();
     }
