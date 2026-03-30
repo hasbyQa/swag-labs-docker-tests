@@ -3,7 +3,7 @@ FROM maven:3.9.6-eclipse-temurin-17
 
 WORKDIR /app
 
-# Install Chrome stable + all its dependencies in one layer
+# Install Chrome and all required system dependencies
 RUN apt-get update && apt-get install -y \
     wget gnupg curl unzip \
     fonts-liberation libatk-bridge2.0-0 libatk1.0-0 \
@@ -17,20 +17,18 @@ RUN apt-get update && apt-get install -y \
     && apt-get install -y google-chrome-stable \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Verify Chrome installed correctly — fails build early if something's wrong
+# Verify Chrome installed — fails build immediately if something is wrong
 RUN google-chrome --version
 
-# Copy pom.xml first so dependency downloads are cached as their own layer
-# If pom.xml hasn't changed, Docker skips this on the next build
+# Copy pom.xml first so Maven dependency downloads are cached as a separate layer
 COPY pom.xml .
 RUN mvn dependency:go-offline -B
 
 COPY src ./src
 
-# SUREFIRE_TIMEOUT gives each test more time in the slower CI/Docker environment
-# forkedProcessTimeoutInSeconds=300 gives the full suite 5 minutes max per fork
-ENV JAVA_OPTS="-Xmx512m"
+# CI/Docker environments are slower than local machines.
+# SELENIUM_TIMEOUT overrides the 20s default — tests read this via TestConfig.
+# surefire timeout gives the full fork 10 minutes before killing it.
+ENV SELENIUM_TIMEOUT=30
 
-CMD ["mvn", "test", "-B", \
-     "-Dsurefire.failIfNoSpecifiedTests=false", \
-     "-Dmaven.surefire.timeout=300"]
+CMD ["mvn", "test", "-B", "-Dmaven.surefire.timeout=600"]

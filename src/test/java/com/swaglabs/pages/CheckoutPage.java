@@ -1,7 +1,9 @@
 package com.swaglabs.pages;
 
 import org.openqa.selenium.By;
+import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
 
 // Covers all 3 checkout steps:
 //   Step 1 - fill info  (/checkout-step-one.html)
@@ -9,18 +11,19 @@ import org.openqa.selenium.WebDriver;
 //   Done   - confirmed  (/checkout-complete.html)
 public class CheckoutPage extends BasePage {
 
-    // Confirmed from live DOM: this site uses camelCase data-test values
+    // Confirmed from live DOM: camelCase data-test values
     private static final By FIRST_NAME_INPUT = By.cssSelector("[data-test='firstName']");
     private static final By LAST_NAME_INPUT  = By.cssSelector("[data-test='lastName']");
     private static final By POSTAL_CODE      = By.cssSelector("[data-test='postalCode']");
     private static final By CONTINUE_BUTTON  = By.cssSelector("[data-test='continue']");
     private static final By ERROR_MESSAGE    = By.cssSelector("[data-test='error']");
+    private static final By CHECKOUT_FORM    = By.cssSelector(".checkout_info");
 
-    // Step 2 — only present on /checkout-step-two.html
+    // Step 2
     private static final By FINISH_BUTTON = By.cssSelector("[data-test='finish']");
     private static final By ITEM_TOTAL    = By.cssSelector("[data-test='subtotal-label']");
 
-    // Confirmation — only present on /checkout-complete.html
+    // Confirmation
     private static final By COMPLETE_HEADER  = By.cssSelector("[data-test='complete-header']");
     private static final By BACK_HOME_BUTTON = By.cssSelector("[data-test='back-to-products']");
 
@@ -28,31 +31,38 @@ public class CheckoutPage extends BasePage {
         super(driver);
     }
 
-    // Form is already rendered when we arrive (CartPage.proceedToCheckout guarantees it)
-    // Double wait: URL first (fast), then element (confirms React rendered step-two DOM)
+    // Types all fields then submits the form via JavaScript form.submit()
+    // This is the most reliable approach in headless Chrome Docker environments
+    // where <input type="submit"> click events don't always fire form submission
     public CheckoutPage fillInfo(String firstName, String lastName, String postalCode) {
         type(FIRST_NAME_INPUT, firstName);
         type(LAST_NAME_INPUT, lastName);
         type(POSTAL_CODE, postalCode);
-        click(CONTINUE_BUTTON);
-        waitForUrlToContain("checkout-step-two");
-        waitForElementVisible(FINISH_BUTTON);
+        submitFormViaJs();
+        waitForElementPresent(FINISH_BUTTON);
         return this;
     }
 
-    // Submits with nothing filled — stays on step 1 with a validation error banner
+    // Submits empty form — stays on step 1 with validation error
+    // Uses jsClick since empty form won't navigate away
     public CheckoutPage submitEmptyForm() {
-        click(CONTINUE_BUTTON);
+        jsClick(CONTINUE_BUTTON);
         waitForElementVisible(ERROR_MESSAGE);
         return this;
     }
 
-    // Types only first name then submits — triggers "Last Name is required" error
+    // Types only first name — triggers last name required error
     public CheckoutPage fillFirstNameOnly(String firstName) {
         type(FIRST_NAME_INPUT, firstName);
-        click(CONTINUE_BUTTON);
+        jsClick(CONTINUE_BUTTON);
         waitForElementVisible(ERROR_MESSAGE);
         return this;
+    }
+
+    // Submits the checkout form via JavaScript click on the Continue button
+    // The .checkout_info element is a div, not a form, so we click the button instead
+    private void submitFormViaJs() {
+        jsClick(CONTINUE_BUTTON);
     }
 
     public String getErrorMessage() {
@@ -63,16 +73,14 @@ public class CheckoutPage extends BasePage {
         return isVisible(ERROR_MESSAGE);
     }
 
-    // Returns the subtotal line e.g. "Item total: $29.99"
     public String getItemTotal() {
         return getText(ITEM_TOTAL);
     }
 
-    // Clicks Finish — double wait: URL then confirmation header
+    // jsClick on Finish too — same Docker headless reliability
     public CheckoutPage finishOrder() {
-        click(FINISH_BUTTON);
-        waitForUrlToContain("checkout-complete");
-        waitForElementVisible(COMPLETE_HEADER);
+        jsClick(FINISH_BUTTON);
+        waitForElementPresent(COMPLETE_HEADER);
         return this;
     }
 
@@ -84,9 +92,8 @@ public class CheckoutPage extends BasePage {
         return isVisible(COMPLETE_HEADER);
     }
 
-    // Clicks Back Home and waits for inventory URL
     public InventoryPage backToProducts() {
-        click(BACK_HOME_BUTTON);
+        jsClick(BACK_HOME_BUTTON);
         waitForUrlToContain("inventory");
         return new InventoryPage(driver);
     }

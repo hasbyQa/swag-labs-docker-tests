@@ -8,8 +8,18 @@ public final class TestConfig {
     // App
     public static final String BASE_URL = "https://www.saucedemo.com";
 
-    // Increased to 20s — saucedemo can be slow, 10s caused intermittent timeouts
-    public static final int TIMEOUT_SECONDS = 20;
+    // Reads SELENIUM_TIMEOUT from environment if set (Docker/CI sets it to 30).
+    // Falls back to 20s for local runs. Avoids hardcoding two different values.
+    public static final int TIMEOUT_SECONDS = resolveTimeout();
+
+    private static int resolveTimeout() {
+        String env = System.getenv("SELENIUM_TIMEOUT");
+        if (env != null && !env.isBlank()) {
+            try { return Integer.parseInt(env.trim()); }
+            catch (NumberFormatException ignored) {}
+        }
+        return 20;
+    }
 
     // Valid credentials
     public static final String VALID_USER     = "standard_user";
