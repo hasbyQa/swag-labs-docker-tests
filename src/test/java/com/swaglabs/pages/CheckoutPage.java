@@ -9,7 +9,7 @@ import org.openqa.selenium.WebDriver;
 //   Done   - confirmed  (/checkout-complete.html)
 public class CheckoutPage extends BasePage {
 
-    // Confirmed from live DOM inspection — this site uses camelCase data-test values
+    // Confirmed from live DOM: this site uses camelCase data-test values
     private static final By FIRST_NAME_INPUT = By.cssSelector("[data-test='firstName']");
     private static final By LAST_NAME_INPUT  = By.cssSelector("[data-test='lastName']");
     private static final By POSTAL_CODE      = By.cssSelector("[data-test='postalCode']");
@@ -28,18 +28,19 @@ public class CheckoutPage extends BasePage {
         super(driver);
     }
 
-    // Form is already rendered when we arrive here (CartPage.proceedToCheckout guarantees it)
-    // After filling, waits for the Finish button to confirm step-two is loaded
+    // Form is already rendered when we arrive (CartPage.proceedToCheckout guarantees it)
+    // Double wait: URL first (fast), then element (confirms React rendered step-two DOM)
     public CheckoutPage fillInfo(String firstName, String lastName, String postalCode) {
         type(FIRST_NAME_INPUT, firstName);
         type(LAST_NAME_INPUT, lastName);
         type(POSTAL_CODE, postalCode);
         click(CONTINUE_BUTTON);
+        waitForUrlToContain("checkout-step-two");
         waitForElementVisible(FINISH_BUTTON);
         return this;
     }
 
-    // Submits with nothing filled — stays on step 1 and shows a validation error
+    // Submits with nothing filled — stays on step 1 with a validation error banner
     public CheckoutPage submitEmptyForm() {
         click(CONTINUE_BUTTON);
         waitForElementVisible(ERROR_MESSAGE);
@@ -67,9 +68,10 @@ public class CheckoutPage extends BasePage {
         return getText(ITEM_TOTAL);
     }
 
-    // Clicks Finish and waits for the confirmation header before returning
+    // Clicks Finish — double wait: URL then confirmation header
     public CheckoutPage finishOrder() {
         click(FINISH_BUTTON);
+        waitForUrlToContain("checkout-complete");
         waitForElementVisible(COMPLETE_HEADER);
         return this;
     }
@@ -82,6 +84,7 @@ public class CheckoutPage extends BasePage {
         return isVisible(COMPLETE_HEADER);
     }
 
+    // Clicks Back Home and waits for inventory URL
     public InventoryPage backToProducts() {
         click(BACK_HOME_BUTTON);
         waitForUrlToContain("inventory");

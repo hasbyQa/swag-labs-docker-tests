@@ -1,20 +1,21 @@
 package com.swaglabs.utils;
 
-// Central config — every constant lives here
+// Central config — every constant lives here. Change once, reflected everywhere.
 public final class TestConfig {
 
-    // Prevent instantiation — this is a constants-only class
     private TestConfig() {}
 
     // App
-    public static final String BASE_URL        = "https://www.saucedemo.com";
-    public static final int    TIMEOUT_SECONDS = 10;
+    public static final String BASE_URL = "https://www.saucedemo.com";
+
+    // Increased to 20s — saucedemo can be slow, 10s caused intermittent timeouts
+    public static final int TIMEOUT_SECONDS = 20;
 
     // Valid credentials
     public static final String VALID_USER     = "standard_user";
     public static final String VALID_PASSWORD = "secret_sauce";
 
-    // Invalid credentials (for negative tests)
+    // Invalid credentials (negative tests)
     public static final String INVALID_USER     = "bad_user";
     public static final String INVALID_PASSWORD = "bad_password";
 
