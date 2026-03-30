@@ -3,19 +3,18 @@ package com.swaglabs.tests;
 import com.swaglabs.pages.CheckoutPage;
 import com.swaglabs.pages.InventoryPage;
 import com.swaglabs.utils.TestConfig;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-// Checkout tests — uses cartPage from BaseTest, setup is a single delegated call
+// Checkout tests — no setup needed here, prepare() tells BaseTest to set up the cart
 @DisplayName("Checkout Tests")
 class CheckoutTest extends BaseTest {
 
-    @BeforeEach
-    void setup() {
-        setUpCart(); // login + add backpack + go to cart — logic lives in BaseTest
+    @Override
+    protected void prepare() {
+        setUpCart();
     }
 
     // Happy path

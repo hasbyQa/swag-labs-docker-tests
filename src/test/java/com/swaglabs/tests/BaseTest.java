@@ -12,50 +12,53 @@ import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
 
 // Single parent for all test classes.
-// Driver lifecycle, shared page state, and navigation helpers all live here.
-// Test classes contain ONLY @Test methods and a single @BeforeEach setup call.
+// ALL @BeforeEach and @AfterEach logic lives here — test classes have none.
+// Subclasses override prepare() to declare what state they need before each test.
 public abstract class BaseTest {
 
     protected WebDriver driver;
-
-    // Shared page state — subclasses access whichever they need
     protected LoginPage     loginPage;
     protected InventoryPage inventoryPage;
     protected CartPage      cartPage;
 
+    // Subclasses override this to declare their required starting state.
+    // Default is no-op — LoginTest needs nothing beyond the login page.
+    protected void prepare() {}
+
     @BeforeEach
-    void setUp() {
+    final void setUp() {
         WebDriverManager.chromedriver().setup();
 
         ChromeOptions options = new ChromeOptions();
-        options.addArguments("--headless=new");           // headless mode, Chrome 112+
-        options.addArguments("--no-sandbox");             // required inside Docker
-        options.addArguments("--disable-dev-shm-usage");  // prevents shared memory issues
+        options.addArguments("--headless=new");
+        options.addArguments("--no-sandbox");
+        options.addArguments("--disable-dev-shm-usage");
         options.addArguments("--disable-gpu");
         options.addArguments("--window-size=1920,1080");
 
         driver = new ChromeDriver(options);
         driver.manage().deleteAllCookies();
 
-        // Every test suite starts on the login page — no test class needs to do this
+        // Login page opened for every test — no test class needs to do this
         loginPage = new LoginPage(driver).open();
+
+        // Runs the subclass-specific setup (inventory, cart, or nothing)
+        prepare();
     }
 
     @AfterEach
-    void tearDown() {
+    final void tearDown() {
         if (driver != null) {
             driver.quit();
         }
     }
 
-    // Logs in with valid credentials and stores result in inventoryPage
-    // CartTest calls this as its full setup
+    // Logs in and stores the inventory page — CartTest calls this via prepare()
     protected void setUpInventory() {
         inventoryPage = loginPage.loginAs(TestConfig.VALID_USER, TestConfig.VALID_PASSWORD);
     }
 
-    // Logs in, adds one item, and navigates to the cart
-    // CheckoutTest calls this as its full setup
+    // Logs in, adds one item, navigates to cart — CheckoutTest calls this via prepare()
     protected void setUpCart() {
         setUpInventory();
         inventoryPage.addItemToCart("sauce-labs-backpack");

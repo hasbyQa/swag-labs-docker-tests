@@ -1,19 +1,18 @@
 package com.swaglabs.tests;
 
 import com.swaglabs.pages.CartPage;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-// Cart tests — uses inventoryPage from BaseTest, setup is a single delegated call
+// Cart tests — no setup needed here, prepare() tells BaseTest to log in first
 @DisplayName("Cart Tests")
 class CartTest extends BaseTest {
 
-    @BeforeEach
-    void setup() {
-        setUpInventory(); // login and land on inventory — logic lives in BaseTest
+    @Override
+    protected void prepare() {
+        setUpInventory();
     }
 
     // Adding items
@@ -53,19 +52,19 @@ class CartTest extends BaseTest {
     @DisplayName("Cart page loads with the added item present")
     void cartPage_shouldContainAddedItem() {
         inventoryPage.addItemToCart("sauce-labs-backpack");
-        CartPage cartPage = inventoryPage.goToCart();
+        CartPage cart = inventoryPage.goToCart();
 
-        assertTrue(cartPage.isLoaded(), "Cart page should load successfully");
-        assertTrue(cartPage.hasItems(), "Cart should contain the added item");
+        assertTrue(cart.isLoaded(), "Cart page should load successfully");
+        assertTrue(cart.hasItems(), "Cart should contain the added item");
     }
 
     @Test
     @DisplayName("Item name in cart matches what was added")
     void cartItem_nameShouldMatchAddedProduct() {
         inventoryPage.addItemToCart("sauce-labs-backpack");
-        CartPage cartPage = inventoryPage.goToCart();
+        CartPage cart = inventoryPage.goToCart();
 
-        assertTrue(cartPage.getFirstItemName().toLowerCase().contains("backpack"),
+        assertTrue(cart.getFirstItemName().toLowerCase().contains("backpack"),
                 "Cart item name should contain 'backpack'");
     }
 
@@ -75,10 +74,10 @@ class CartTest extends BaseTest {
     @DisplayName("Removing the only item empties the cart")
     void removeItem_cartShouldBeEmpty() {
         inventoryPage.addFirstItemToCart();
-        CartPage cartPage = inventoryPage.goToCart();
-        cartPage.removeFirstItem();
+        CartPage cart = inventoryPage.goToCart();
+        cart.removeFirstItem();
 
-        assertFalse(cartPage.hasItems(),
+        assertFalse(cart.hasItems(),
                 "Cart should be empty after removing the only item");
     }
 
@@ -86,9 +85,9 @@ class CartTest extends BaseTest {
     @DisplayName("Cart badge disappears when cart is emptied")
     void removeAllItems_badgeShouldDisappear() {
         inventoryPage.addFirstItemToCart();
-        CartPage cartPage = inventoryPage.goToCart();
-        cartPage.removeFirstItem();
-        cartPage.continueShopping();
+        CartPage cart = inventoryPage.goToCart();
+        cart.removeFirstItem();
+        cart.continueShopping();
 
         assertFalse(inventoryPage.isCartBadgeVisible(),
                 "Cart badge should not be visible when cart is empty");
