@@ -1,30 +1,19 @@
 package com.swaglabs.tests;
 
 import com.swaglabs.pages.CartPage;
-import com.swaglabs.pages.InventoryPage;
-import com.swaglabs.pages.LoginPage;
-import com.swaglabs.utils.TestConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Tests for the Cart feature.
- * Covers: adding items, cart badge, removing items, cart persistence.
- */
+// Cart tests — uses inventoryPage from BaseTest, setup is a single delegated call
 @DisplayName("Cart Tests")
 class CartTest extends BaseTest {
 
-    // Every cart test starts logged in on the inventory page
-    private InventoryPage inventoryPage;
-
     @BeforeEach
-    void loginAndGoToInventory() {
-        inventoryPage = new LoginPage(driver)
-                .open()
-                .loginAs(TestConfig.VALID_USER, TestConfig.VALID_PASSWORD);
+    void setup() {
+        setUpInventory(); // login and land on inventory — logic lives in BaseTest
     }
 
     // Adding items
@@ -39,7 +28,7 @@ class CartTest extends BaseTest {
     }
 
     @Test
-    @DisplayName("Cart badge shows correct count after adding one item")
+    @DisplayName("Cart badge shows count of 1 after adding one item")
     void addOneItem_badgeShouldShowOne() {
         inventoryPage.addFirstItemToCart();
 
@@ -80,14 +69,13 @@ class CartTest extends BaseTest {
                 "Cart item name should contain 'backpack'");
     }
 
-    //  Removing items
+    // Removing items
 
     @Test
     @DisplayName("Removing the only item empties the cart")
     void removeItem_cartShouldBeEmpty() {
         inventoryPage.addFirstItemToCart();
         CartPage cartPage = inventoryPage.goToCart();
-
         cartPage.removeFirstItem();
 
         assertFalse(cartPage.hasItems(),
@@ -100,8 +88,6 @@ class CartTest extends BaseTest {
         inventoryPage.addFirstItemToCart();
         CartPage cartPage = inventoryPage.goToCart();
         cartPage.removeFirstItem();
-
-        // Go back and check badge is gone
         cartPage.continueShopping();
 
         assertFalse(inventoryPage.isCartBadgeVisible(),

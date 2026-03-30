@@ -1,48 +1,30 @@
 package com.swaglabs.tests;
 
-import com.swaglabs.pages.InventoryPage;
-import com.swaglabs.pages.LoginPage;
 import com.swaglabs.utils.TestConfig;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Tests for the Login feature.
- * Covers: successful login, failed login, locked-out user, empty fields.
- */
+// Login tests — loginPage is opened in BaseTest.setUp(), nothing to set up here
 @DisplayName("Login Tests")
 class LoginTest extends BaseTest {
-
-    private LoginPage loginPage;
-
-    @BeforeEach
-    void openLoginPage() {
-        // Navigate to Swag Labs before every test
-        loginPage = new LoginPage(driver).open();
-    }
 
     // Happy path
 
     @Test
     @DisplayName("Valid credentials redirect to Products page")
     void validLogin_shouldLandOnInventoryPage() {
-        InventoryPage inventoryPage = loginPage.loginAs(
-                TestConfig.VALID_USER,
-                TestConfig.VALID_PASSWORD
-        );
+        inventoryPage = loginPage.loginAs(TestConfig.VALID_USER, TestConfig.VALID_PASSWORD);
 
         assertTrue(inventoryPage.isLoaded(),
                 "Inventory page should be visible after successful login");
-
         assertEquals(TestConfig.PRODUCTS_TITLE, inventoryPage.getPageTitle(),
                 "Page title should read 'Products'");
     }
 
     @Test
-    @DisplayName("URL changes to /inventory.html after login")
+    @DisplayName("URL contains /inventory.html after login")
     void validLogin_urlShouldContainInventory() {
         loginPage.loginAs(TestConfig.VALID_USER, TestConfig.VALID_PASSWORD);
 
@@ -59,7 +41,6 @@ class LoginTest extends BaseTest {
 
         assertTrue(loginPage.isErrorDisplayed(),
                 "Error message should appear for wrong password");
-
         assertTrue(loginPage.getErrorMessage().contains(TestConfig.LOGIN_ERROR_MESSAGE),
                 "Error text should start with 'Epic sadface:'");
     }
@@ -80,13 +61,12 @@ class LoginTest extends BaseTest {
 
         assertTrue(loginPage.isErrorDisplayed(),
                 "Locked-out user should see an error");
-
         assertTrue(loginPage.getErrorMessage().toLowerCase().contains("locked"),
                 "Error should mention 'locked'");
     }
 
     @Test
-    @DisplayName("Empty credentials shows error banner")
+    @DisplayName("Empty credentials show error banner")
     void emptyCredentials_shouldShowError() {
         loginPage.attemptLogin("", "");
 
